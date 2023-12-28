@@ -7,16 +7,16 @@ Johnson, S. E., Tittes, S., & Franks, S. J. (2023). Rapid, nonparallel genomic e
 DOI: 10.5061/dryad.n5tb2rbzx
 
 ## Note:
-Files are names as 2022 because that is when the final analyses and submission were prepared, but the manuscript was published in 2023/
+Files are names as 2022 because that is when the final analyses and submission were prepared, but the manuscript was published in 2023.
 
 ## Data files:
 
-"Truseq3-PE-2.fa" contains adapters used to trim reads with trimmomatic software.
-"bam.txt" is a list of bam file names used in the fais_baypass.py script.
-"brassica.poolsize" is a list of the ploidy number of each population used when running the core and axillary models in BayPass.
-"brassica.covariates" is a file that encodes whether each population is ancestor or descendant for the first covariate (row 1) and, if descendant, drought or watered for the second covariate (row 2) when runing the axillary model in BayPass.
-"Johnson_et_al_2022_Evolution_individuals_data.csv" contains phenotypic data and fitness collected from the test generation and previously published in Johnson et al. 2022 in Evolution.
-"Johnson_et_al_2022_Evolution_individuals_data.xlsx" contains the same data as Johnson_et_al_2022_Evolution_individuals_data.csv in the first tab and a descriptioin of variables in the second tab.
+"Truseq3-PE-2.fa" contains adapters used to trim reads with trimmomatic software.  
+"bam.txt" is a list of bam file names used in the fais_baypass.py script.  
+"brassica.poolsize" is a list of the ploidy number of each population used when running the core and axillary models in BayPass.  
+"brassica.covariates" is a file that encodes whether each population is ancestor or descendant for the first covariate (row 1) and, if descendant, drought or watered for the second covariate (row 2) when runing the axillary model in BayPass.  
+"Johnson_et_al_2022_Evolution_individuals_data.csv" contains phenotypic data and fitness collected from the test generation and previously published in Johnson et al. 2022 in Evolution.  
+"Johnson_et_al_2022_Evolution_individuals_data.xlsx" contains the same data as Johnson_et_al_2022_Evolution_individuals_data.csv in the first tab and a descriptioin of variables in the second tab.  
 "Atha__v__Brap.tsv" contains a list of B. rapa genes with A. thaliana annotations added with OrthoFinder and was obtained from Prof Michael Barker at the University of Arizona.
   * Atha__v__Brap.tsv variables:
     * Orthogroup: Unique nine-digit orthogroup ID between the TAIR Arabidopsis thaliana genome (https://academic.oup.com/nar/article/40/D1/D1202/2903058) and the V1.5 Brassica rapa genome from BRAD (http://brassicadb.cn/#/SpeciesInfo/).
