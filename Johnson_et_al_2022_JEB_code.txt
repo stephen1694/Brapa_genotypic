@@ -1,0 +1,683 @@
+### section 1: set up and data download 
+
+
+## section 1A: directory set up
+
+# make directory for project (johnson) with data, ref_genome, results subdirectories
+# absolute directory paths provided, but relative paths can be used. All data and analysis will be within the project directory here named "johnson"
+mkdir /Volumes/Franks_lab/johnson/
+mkdir /Volumes/Franks_lab/johnson/data/ /Volumes/Franks_lab/johnson/ref_genome/ /Volumes/Franks_lab/johnson/results/
+
+# make rawfastq directory within data directory
+mkdir /Volumes/Franks_lab/johnson/data/rawfastq/
+
+# set wd
+setwd /Volumes/Franks_lab/johnson/data/rawfastq/
+
+
+## section 1B: download data and verify integrity
+
+# raw fastq can be obtained from the sequencing read archive (SRA) under the accession PRJNA882576
+
+# code used to download from sequencing facility directly is archived below (rest of section 1B) and commented out
+
+# downloaded raw fastq files from sequencing facility
+#wget --recursive --no-parent --no-directories https://genome.med.nyu.edu/results/external/Fordham/2019-12-11/fastq/
+
+# verified integrity of download from sequencing facility
+#shasum *fastq* > fastq_checksums.sha
+#shasum -c fastq_checksums.sha
+
+
+## section 1C: inspect quality of raw reads with fastQC
+
+# created fastqc_untrimmed_reads directory within results
+mkdir /Volumes/Franks_lab/johnson/results/fastqc_untrimmed_reads/
+
+# ran fastqc on raw files
+fastqc *fastqc
+mv *html /Volumes/Franks_lab/johnson/results/fastqc_untrimmed_reads/
+mv *.zip /Volumes/Franks_lab/johnson/results/fastqc_untrimmed_reads/
+
+# calculate rad counts of raw fastq files for Table S1, save in raw_read_counts.txt
+for infile in *.fastq.gz; do echo -n $infile": " >> raw_read_counts.txt; echo $(gunzip -c $infile | wc -l) / 4|bc >> raw_read_counts.txt; done
+
+
+
+### section 2: trimming and QC
+
+
+## section 2A: preparation for trimming
+
+# software used is trimmomatic v0.39
+#available for download at https://github.com/usadellab/Trimmomatic
+
+# I modified the contents of the TruSeq3-PE-2.fa file downloaded with trimmomatic to exactly match those reported in my library prep kit
+#this involved deleting the leading "T" from PE1 and its complementary trailing "T" from PE1_rc; and the leading "G" from PE2 and trailing "C" from PE2_rc
+# I provide this edited Truseq3-PE-2.fa file archived under dryad
+#this file should be placed in the rawfastq directory located at /Volumes/Franks_lab/johnson/data/rawfastq/
+
+# TruSeq3-PE-2.fa file contents after these edits:
+>PrefixPE/1
+TACACTCTTTCCCTACACGACGCTCTTCCGATCT
+>PrefixPE/2
+GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
+>PE1
+ACACTCTTTCCCTACACGACGCTCTTCCGATCT
+>PE1_rc
+AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+>PE2
+TGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
+>PE2_rc
+AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
+
+# added trimmomatic-0.39-1 to path 
+
+
+## section 2B: trimming with trimmomatic
+
+# set wd to rawfastq if not already there
+setwd /Volumes/Franks_lab/johnson/data/rawfastq/
+
+# trim reads
+for infile in *_R1_001.fastq.gz; do base=$(basename ${infile} _R1_001.fastq.gz); \
+	trimmomatic PE ${infile} ${base}_R2_001.fastq.gz; ${base}_R1_001.paired.fastq.gz \
+	${base}_R1_001.unpaired.fastq.gz ${base}_R2_001.paired.fastq.gz ${base}_R2_001.unpaired.fastq.gz \
+	ILLUMINACLIP:TruSeq3-PE-2.fa:2:30:10 LEADING:3 SLIDINGWINDOW:4:20 MINLEN:36; done
+
+# count reads remaining after trimming:
+for infile in *.paired.fastq.gz; do echo -n $infile": " >> trimmed_PE_read_counts.txt; echo $(gunzip -c $infile | wc -l) / 4|bc >> trimmed_PE_read_counts.txt; done
+
+# make trimmed_fastq directory in results
+mkdir /Volumes/Franks_lab/johnson/results/trimmed_fastq/
+
+# moved trimmed fastq files to results/trimmed/fastq directory
+mv *pair* /Volumes/Franks_lab/johnson/esults/trimmed_fastq/
+
+
+## section 2C: quality check with fastqc
+
+# set working directory to trimmed_fastq directory
+cd /Volumes/Franks_lab/johnson/results/trimmed_fastq/
+
+# ran fastqc on trimmed fastq files
+fastqc *fastq*
+
+# make fastqc directory within trimmed_fastq
+mkdir /Volumes/Franks_lab/johnson/results/trimmed_fastq/fastqc/
+
+# move fastqc files to this fastqc direcoty
+mv *.zip /Volumes/Franks_lab/johnson/results/trimmed_fastq/fastqc/
+mv *html /Volumes/Franks_lab/johnson/results/trimmed_fastq/fastqc/
+
+
+
+### section 3: reference genome
+# can see these files by going to the download tab on the BRAD database (http://brassicadb.cn/#/Download/) -> Brassica_Genome_Data/ -> Brara_Chiifu_V1.5/ (version 1.5) or Brara_Chiifu_V3.0/ (version 3.0)
+# reference genome and gene files are also available through correspondance in case their availability through the BRAD database deteriorates 
+
+## section 3A: reference genome 3.0 download 
+
+# changed working directory to ref_genome
+cd /Volumes/Franks_lab/johnson/ref_genome/
+
+# downloaded B. rapa reference genome 3.0 from BRAD database
+curl -L -o Brapa_sequence_v3.0.fasta.gz http://39.100.233.196:82/download_genome/Brassica_Genome_data/Brapa30/Brapa_sequence_v3.0.fasta.gz
+
+# unzipped
+gunzip Brapa_sequence_v3.0.fasta.gz
+
+# indexed 
+bwa index Brapa_sequence_v3.0.fasta 
+
+# created reference genome dictionary using picard
+java -jar ~/libraries/picard/picard.jar CreateSequenceDictionary R=Brapa_sequence_v3.0.fasta O=Brapa_sequence_v3.0.fasta.dict
+
+# download unzip, index v1.5 genome
+curl -L -o Brapa_sequence_v1.5.fa.gz http://39.100.233.196:82/download_genome/Brassica_Genome_data/Brara_Chiifu_V1.5/Brapa_sequence_v3.0.fa.gz
+gunzip Brapa_sequence_v1.5.fa.gz
+bwa index Brapa_sequence_v1.5.fa
+
+# download list of v1.5 genes
+curl -L -o Brapa_sequence_v1.5.fa.gz http://39.100.233.196:82/download_genome/Brassica_Genome_data/Brara_Chiifu_V1.5/Brapa_gene_v1.5.gff.gz
+
+
+### section 3B: alignment of reads to reference genome
+
+# software required: bwa v0.7.17
+#available for download https://sourceforge.net/projects/bio-bwa/files/
+
+# added bwa-0.7.12 to path
+
+# set working directory to raw fastq in data
+cd /Volumes/Franks_lab/johnson/data/rawfastq/
+
+# grabbed header info for each library 
+for infile in Library-*_S*_L001_R1_001.paired.fastq.gz; do echo -n $infile" " >> headers.txt; gunzip -c $infile | head -1 >> headers.txt; done
+
+# create sam directory within results  
+mkdir /Volumes/Franks_lab/johnson/results/sam/
+
+# change directory to sam 
+cd /Volumes/Franks_lab/johnson/results/sam/
+
+# because I was unable to conserve read group information when aligning all at once, I performed this step for each library separately and specified RG information
+#RGPL is the sequencing platform, which is illumina
+#RGPU is the adapter barcode sequences for each population. For example, for both technical replicates of library 1 (drought replicate 1; D1) this is NCGCGGTT+NGCGCTAG.
+#RGSM denotes the sample the reads of each library belong to. This allows both technical replicates of each library to be assigned the same sample information. 
+#RGID denotes the ID for each read group sample, and the same naming as for RGSM was used here.
+#RGLB is the library name, and here technical replicates were given unique names. For example, for library 1 (drought replicate 1; D1), the technical replicates were Library1_S1 and Library1_S2
+
+bwa mem -t 14 -M -R '@RG\tID:D1\tLB:library1_L1\tPL:ILLUMINA\tPU:NCGCGGTT+NGCGCTAG\tSM:D1' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-1_S1_L001_R1_001.paired.fastq.gz Library-1_S1_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library1_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D1\tLB:library1_L2\tPL:ILLUMINA\tPU:NCGCGGTT+NGCGCTAG\tSM:D1' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-1_S1_L002_R1_001.paired.fastq.gz Library-1_S1_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library1_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D2\tLB:library2_L1\tPL:ILLUMINA\tPU:NTATAACC+NATATCGA\tSM:D2' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-2_S2_L001_R1_001.paired.fastq.gz Library-2_S2_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library2_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D2\tLB:library2_L2\tPL:ILLUMINA\tPU:NTATAACC+NATATCGA\tSM:D2' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-2_S2_L002_R1_001.paired.fastq.gz Library-2_S2_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library2_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D3\tLB:library3_L1\tPL:ILLUMINA\tPU:NGACTTGG+NGCAGACG\tSM:D3' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-3_S3_L001_R1_001.paired.fastq.gz Library-3_S3_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library3_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D3\tLB:library3_L2\tPL:ILLUMINA\tPU:NGACTTGG+NGCAGACG\tSM:D3' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-3_S3_L002_R1_001.paired.fastq.gz Library-3_S3_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library3_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D4\tLB:library4_L1\tPL:ILLUMINA\tPU:NAGTCCAA+NATGAGTA\tSM:D4' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-4_S4_L001_R1_001.paired.fastq.gz Library-4_S4_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library4_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D4\tLB:library4_L2\tPL:ILLUMINA\tPU:NAGTCCAA+NATGAGTA\tSM:D4' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-4_S4_L002_R1_001.paired.fastq.gz Library-4_S4_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library4_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D5\tLB:library5_L1\tPL:ILLUMINA\tPU:NTCCACTG+NGGTGCGT\tSM:D5' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-5_S5_L001_R1_001.paired.fastq.gz Library-5_S5_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library5_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D5\tLB:library5_L2\tPL:ILLUMINA\tPU:NTCCACTG+NGGTGCGT\tSM:D5' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-5_S5_L002_R1_001.paired.fastq.gz Library-5_S5_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library5_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D6\tLB:library6_L1\tPL:ILLUMINA\tPU:NCTTGTCA+NAACATAC\tSM:D6' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-6_S6_L001_R1_001.paired.fastq.gz Library-6_S6_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library6_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D6\tLB:library6_L2\tPL:ILLUMINA\tPU:NCTTGTCA+NAACATAC\tSM:D6' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-6_S6_L002_R1_001.paired.fastq.gz Library-6_S6_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library6_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D7\tLB:library7_L1\tPL:ILLUMINA\tPU:NAAGCTAG+NCATAGCG\tSM:D7' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-7_S7_L001_R1_001.paired.fastq.gz Library-7_S7_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library7_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D7\tLB:library7_L2\tPL:ILLUMINA\tPU:NAAGCTAG+NCATAGCG\tSM:D7' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-7_S7_L002_R1_001.paired.fastq.gz Library-7_S7_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library7_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D8\tLB:library8_L1\tPL:ILLUMINA\tPU:NGGATCGA+NTGCGATA\tSM:D8' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-8_S8_L001_R1_001.paired.fastq.gz Library-8_S8_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library8_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:D8\tLB:library8_L2\tPL:ILLUMINA\tPU:NGGATCGA+NTGCGATA\tSM:D8' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-8_S8_L002_R1_001.paired.fastq.gz Library-8_S8_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library8_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W1\tLB:library9_L1\tPL:ILLUMINA\tPU:NGTTCAGG+NCAACAGA\tSM:W1' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-9_S9_L001_R1_001.paired.fastq.gz Library-9_S9_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library9_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W1\tLB:library9_L2\tPL:ILLUMINA\tPU:NGTTCAGG+NCAACAGA\tSM:W1' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-9_S9_L002_R1_001.paired.fastq.gz Library-9_S9_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library9_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W2\tLB:library10_L1\tPL:ILLUMINA\tPU:NACCTGAA+NTGGTGAG\tSM:W2' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-10_S10_L001_R1_001.paired.fastq.gz Library-10_S10_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library10_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W2\tLB:library10_L2\tPL:ILLUMINA\tPU:NACCTGAA+NTGGTGAG\tSM:W2' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-10_S10_L002_R1_001.paired.fastq.gz Library-10_S10_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library10_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W3\tLB:library11_L1\tPL:ILLUMINA\tPU:NCTCTACT+NGCGGTTC\tSM:W3' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-11_S11_L001_R1_001.paired.fastq.gz Library-11_S11_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library11_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W3\tLB:library11_L2\tPL:ILLUMINA\tPU:NCTCTACT+NGCGGTTC\tSM:W3' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-11_S11_L002_R1_001.paired.fastq.gz Library-11_S11_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library11_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W4\tLB:library12_L1\tPL:ILLUMINA\tPU:NTCTCGTC+NATAACCT\tSM:W4' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-12_S12_L001_R1_001.paired.fastq.gz Library-12_S12_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library12_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W4\tLB:library12_L2\tPL:ILLUMINA\tPU:NTCTCGTC+NATAACCT\tSM:W4' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-12_S12_L002_R1_001.paired.fastq.gz Library-12_S12_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library12_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W5\tLB:library13_L1\tPL:ILLUMINA\tPU:NCAAGTCT+NAGGATGA\tSM:W5' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-13_S13_L001_R1_001.paired.fastq.gz Library-13_S13_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library13_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W5\tLB:library13_L2\tPL:ILLUMINA\tPU:NCAAGTCT+NAGGATGA\tSM:W5' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-13_S13_L002_R1_001.paired.fastq.gz Library-13_S13_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library13_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W6\tLB:library14_L1\tPL:ILLUMINA\tPU:NTGGACTC+NGAAGCAG\tSM:W6' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-14_S14_L001_R1_001.paired.fastq.gz Library-14_S14_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library14_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W6\tLB:library14_L2\tPL:ILLUMINA\tPU:NTGGACTC+NGAAGCAG\tSM:W6' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-14_S14_L002_R1_001.paired.fastq.gz Library-14_S14_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library14_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W7\tLB:library15_L1\tPL:ILLUMINA\tPU:NGCTTAAG+NCGTGACC\tSM:W7' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-15_S15_L001_R1_001.paired.fastq.gz Library-15_S15_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library15_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W7\tLB:library15_L2\tPL:ILLUMINA\tPU:NGCTTAAG+NCGTGACC\tSM:W7' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-15_S15_L002_R1_001.paired.fastq.gz Library-15_S15_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library15_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W8\tLB:library16_L1\tPL:ILLUMINA\tPU:NATCCGGA+NTACAGTT\tSM:W8' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-16_S16_L001_R1_001.paired.fastq.gz Library-16_S16_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library16_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:W8\tLB:library16_L2\tPL:ILLUMINA\tPU:NATCCGGA+NTACAGTT\tSM:W8' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-16_S16_L002_R1_001.paired.fastq.gz Library-16_S16_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library16_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:A\tLB:library17_L1\tPL:ILLUMINA\tPU:NAATACAG+NTATTCAC\tSM:A' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-17_S17_L001_R1_001.paired.fastq.gz Library-17_S17_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library17_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:A\tLB:library17_L2\tPL:ILLUMINA\tPU:NAATACAG+NTATTCAC\tSM:A' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-17_S17_L002_R1_001.paired.fastq.gz Library-17_S17_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library17_L2_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:A\tLB:library18_L1\tPL:ILLUMINA\tPU:NGGCGTGA+NCGCCTGT\tSM:A' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-18_S18_L001_R1_001.paired.fastq.gz Library-18_S18_L001_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library18_L1_pa_withRG.sam
+bwa mem -t 14 -M -R '@RG\tID:A\tLB:library18_L2\tPL:ILLUMINA\tPU:NGGCGTGA+NCGCCTGT\tSM:A' /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta Library-18_S18_L002_R1_001.paired.fastq.gz Library-18_S18_L002_R2_001.paired.fastq.gz > /Volumes/Franks_lab/johnson/results/sam/Library18_L2_pa_withRG.sam
+
+
+
+### section 4: preparing sam and bam files
+
+# software used is samtools v1.9
+#available for download https://sourceforge.net/projects/samtools/files/samtools/
+
+# added samtools-1.9 to path
+
+
+## section 4A: preparing sorted and merged sam file for 8 drought, 8 watered, 1 ancestor libraries
+
+# created merged directory within sam directory
+mkdir /Volumes/Franks_lab/johnson/results/sam/merged/
+
+# sorted sam files of same library on different lanes
+for infile in *_pa_withRG.sam; do base=$(basename ${infile} _pa_withRG.sam); samtools sort -m 2G ${infile} -o ${base}_pas_withRG.sam; done
+
+# merged sam files of same library on different lanes
+for infile in *_L1_pas_withRG.sam; do base=$(basename ${infile} _L1_pas_withRG.sam); samtools merge merged/${base}_pasm_withRG.sam ${infile} ${base}_L2_pas_withRG.sam; done
+
+# changed working directory to merged 
+cd /Volumes/Franks_lab/johnson/results/sam/merged/
+
+# merged ancestor libraries (17 and 18) together
+samtools merge merged/Ancestor_pas_withRG.sam Library17_L1_pas_withRG.sam Library17_L2_pas_withRG.sam Library18_L1_pas_withRG.sam Library18_L2_pas_withRG.sam
+
+# sorted each sorted/merged sam file and removed unsorted merged file
+for infile in *_pasm_withRG.sam; do base=$(basename ${infile} _pasm_withRG.sam); samtools sort -m 2G ${infile} -o ${base}_pasms_withRG.sam; rm ${infile}; done
+
+# calculated percent of reads that mapped to genome for each library for Table S1, saved in alignment_statistics.txt
+for infile in *.sam; do echo $infile >> alignment_statistics.txt; samtools flagstat $infile >> alignment_statistics.txt; done
+
+
+## section 4B: preparing bam file for 8 drought, 8 watered, 1 ancestor libraries
+
+# created bam directory within results
+mkdir /Volumes/Franks_lab/johnson/results/bam/
+
+# converted sam files to bam
+for infile in *_pasms_withRG.sam; do base=$(basename ${infile} _pasms_withRG.sam); samtools view -bh ${infile} > /Volumes/Franks_lab/johnson/results/bam/${base}_pasms_withRG.bam; done
+
+
+## section 4C: preparing bam file for pooled drought libraries, pooled watered libraries, and ancestor library
+
+# merged 8 drought libraries, then sorted, then converted to bam, then checked for errors
+samtools merge Drought_pasm_withRG.sam Library1_pasms_withRG.sam Library2_pasms_withRG.sam Library3_pasms_withRG.sam Library4_pasms_withRG.sam Library5_pasms_withRG.sam Library6_pasms_withRG.sam Library7_pasms_withRG.sam Library8_pasms_withRG.sam
+samtools sort -m 2G Drought_pasm_withRG.sam -o Drought_pasms_withRG.sam
+samtools view -bh Drought_pasms_withRG.sam > /Volumes/Franks_lab/johnson/results/bam/Drought_pasms_withRG.bam
+for infile in Drought_pasms_withRG.bam; do java -jar ~/libraries/picard2.25.jar ValidateSamFile I=${infile} MODE=SUMMARY; java -jar ~/libraries/picard2.25.jar ValidateSamFile I=${infile} MODE=VERBOSE; done
+
+# merged 8 watered libraries, then sorted, then converted to bam, then checked for errors
+samtools merge Watered_pasm_withRG.sam Library9_pasms_withRG.sam Library10_pasms_withRG.sam Library11_pasms_withRG.sam Library12_pasms_withRG.sam Library13_pasms_withRG.sam Library14_pasms_withRG.sam Library15_pasms_withRG.sam Library16_pasms_withRG.sam 
+samtools sort -m 2G Watered_pasm_withRG.sam -o Watered_pasms_withRG.sam
+samtools view -bh Watered_pasms_withRG.sam > /Volumes/Franks_lab/johnson/results/bam/Watered_pasms_withRG.bam
+for infile in Watered_pasms_withRG.bam; do java -jar ~/libraries/picard2.25.jar ValidateSamFile I=${infile} MODE=SUMMARY; java -jar ~/libraries/picard2.25.jar ValidateSamFile I=${infile} MODE=VERBOSE; done
+
+
+## section 4D: inspecting bam files
+
+# software used is gatk 4.2.1.0
+#available for download https://github.com/broadinstitute/gatk/releases
+
+# navigate to bam directory in results
+cd /Volumes/Franks_lab/johnson/results/bam/
+
+# checked bam files for errors
+for infile in *_pasms_withRG.bam; do echo -n $infile": " >> errors_summary.txt; java -jar ~/libraries/picard2.25.jar ValidateSamFile I=${infile} MODE=SUMMARY >> errors_summary.txt; done
+for infile in *_pasms_withRG.bam; do echo -n $infile": " >> errors_verbose.txt; java -jar ~/libraries/picard2.25.jar ValidateSamFile I=${infile} MODE=VERBOSE >> errors_verbose.txt; done
+
+# calculate coverages of bam files for Table S1, save in library_coverages.txt
+for infile in *_pasms_withRG.bam; do (echo $infile & samtools depth -a $infile  |  awk '{sum+=$3} END { print $infile" average coverage = ",sum/NR}' >> library_coverages.txt); done
+
+# Here I deleted all intermediate sam files to make space, keeping only final bam files
+
+
+
+### section 5: preparation of synchronized and mpileup files
+
+
+## section 5A: multipileup files for grouped populations and regimes
+
+# generate and synchronize mpileup file for all populations
+samtools mpileup -B Ancestor_pasms_withRG.bam Library1_pasms_withRG.bam Library2_pasms_withRG.bam Library3_pasms_withRG.bam Library4_pasms_withRG.bam Library5_pasms_withRG.bam Library6_pasms_withRG.bam Library7_pasms_withRG.bam Library8_pasms_withRG.bam Library9_pasms_withRG.bam Library10_pasms_withRG.bam Library11_pasms_withRG.bam Library12_pasms_withRG.bam Library13_pasms_withRG.bam Library14_pasms_withRG.bam Library15_pasms_withRG.bam Library16_pasms_withRG.bam > Population_level.mpileup
+java -jar ~/libraries/popoolation2_1201/mpileup2sync.jar --input Population_level.mpileup --output Population_level.sync --fastq-type sanger --min-qual 20 --threads 14
+
+# generate and synchronize mpileup file for all Regimes
+samtools mpileup -B Ancestor_pasms_withRG.bam Drought_pasms_withRG.bam Watered_pasms_withRG.bam > Regime_level.mpileup
+java -jar ~/libraries/popoolation2_1201/mpileup2sync.jar --input Regime_level.mpileup --output Regime_level.sync --fastq-type sanger --min-qual 20 --threads 14
+
+# generate and synchronize mpileup file for ancestor and drought populations
+samtools mpileup -B Ancestor_pasms_withRG.bam Library1_pasms_withRG.bam Library2_pasms_withRG.bam Library3_pasms_withRG.bam Library4_pasms_withRG.bam Library5_pasms_withRG.bam Library6_pasms_withRG.bam Library7_pasms_withRG.bam Library8_pasms_withRG.bam > ancestor_drought_pops.mpileup
+java -jar ~/libraries/popoolation2_1201/mpileup2sync.jar --input Ancestor_drought_pops.mpileup --output Ancestor_drought_pops.sync --fastq-type sanger --min-qual 20 --threads 14
+
+# generate and synchronize mpileup file with 2 ancestor replicates to test sampling effect
+samtools mpileup -B Library17_pasms_withRG.bam Library18_pasms_withRG.bam > Ancestor_replicates.mpileup
+java -jar ~/libraries/popoolation2_1201/mpileup2sync.jar --input Ancestor_replicates.mpileup --output Ancestor_replicates.sync --fastq-type sanger --min-qual 20 --threads 12
+
+
+## section 5B: preparation of pileup file for individual populations and regimes
+
+# navigate to bam directory if not already there
+cd /Volumes/Franks_lab/johnson/results/bam/
+
+# make pi directory in results
+mkdir /Volumes/Franks_lab/johnson/results/pi/
+
+# generate separate pileup file for each Regime bam file for Tajimas pi calculation
+samtools mpileup -B Ancestor_pasms_withRG.bam > /Volumes/Franks_lab/johnson/results/pi/Ancestor.pileup
+samtools mpileup -B Drought_pasms_withRG.bam > /Volumes/Franks_lab/johnson/results/pi/Drought.pileup
+samtools mpileup -B Watered_pasms_withRG.bam > /Volumes/Franks_lab/johnson/results/pi/Watered.pileup
+
+# generate separate pileup file for each drought library 
+for infile in Library[1-8]_pasms_withRG.bam; do (base=$(basename ${infile} _pasms_withRG.bam); samtools mpileup -B ${infile} > /Volumes/Franks_lab/johnson/results/pi/${base}.mpileup); done
+
+
+
+### section 6: Analysis with PoPoolation and Popoolation2
+
+
+## section 6A: calculate snp frequency differences with snp_frequency_diff in Popoolation2
+
+# software used was popoolation2 1202
+#available for download from https://sourceforge.net/projects/popoolation2/files/
+
+# create snp_diff directory in results
+mkdir /Volumes/Franks_lab/johnson/results/snp_diff/
+
+# navigate to snp_diff directory
+cd /Volumes/Franks_lab/johnson/results/snp_diff/
+
+# calc SNP frequency differences by Population with min count of 50 (parameters also listed in Table S2)
+# this shows SNPs and differences in frequencies but no evaluation of statistical significance
+perl ~/libraries/popoolation2_1201/snp-frequency-diff.pl --input /Volumes/Franks_lab/johnson/results/bam/Population_level.sync --output-prefix Population_level --min-count 50 --min-coverage 15 --max-coverage 318,172,60,67,244,111,53,122,198,153,177,154,175,130,179,63,142
+# this generated Population_level.params; Population_level_pwc; and Population_level_rc
+
+# run Fig1_code.R script to generate pca plot of snps by population
+
+
+## section 6B: snp calling with fisher-test.pl in Popoolation2
+
+# Downloaded TEXT-SNP-1.31 from https://metacpan.org/dist/Text-NSP to Modules directory in Popoolation2
+# Then copied Text directory to immediately inside the Modules directory of Popoolation2 to get fisher-test.pl to run
+
+# create fet directory in results with ancestor_regime_vs_drought_pops, regime_comparisons, and ancestor_replciates subdirectories
+mkdir /Volumes/Franks_lab/johnson/results/fet/
+mkdir /Volumes/Franks_lab/johnson/results/fet/regime_comparisons/ /Volumes/Franks_lab/johnson/results/fet/ancestor_regime_vs_drought_pops/ /Volumes/Franks_lab/johnson/results/et/ancestor_replciates/
+
+# navigate to bam directory
+# cd /Volumes/Franks_lab/johnson/results/bam/
+
+# fisher exact tests (FETs) for statistically significant SNP changes between drought populations and Ancestor Regime (parameters also listed in Table S4)
+perl ~/libraries/popoolation2_1201/fisher-test.pl --input Ancestor_drought_pops.sync --output /Volumes/Franks_lab/johnson/results/fet/ancestor_regime_vs_drought_pops/Ancestor_drought_pops.fet --min-count 15 --min-coverage 15 --max-coverage 318,172,60,67,244,111,53,122,198 --suppress-noninformative
+# generated Ancestor_drought_pops.fet and Ancestor_drought_pops.fet.params
+
+# fisher exact tests for statistically significant SNP changes between Ancestor replicates
+perl ~/libraries/popoolation2_1201/fisher-test.pl --input Ancestor_replicates.sync --output /Volumes/Franks_lab/johnson/results/fet/ancestor_replicates/Ancestor_replicates.fet --min-count 5 --min-coverage 15 --max-coverage 197,131 --suppress-noninformative
+# generated Ancestor_replicates.fet and Ancestor_replicates.params
+
+
+
+### section 7: Tajimas pi with Variance-sliding.pl in Popoolation
+
+# navigate to pi direcotry
+cd /Volumes/Franks_lab/johnson/results/pi/
+
+## section 7A: calculating Tajima's pi
+
+# software used is popoolation 1.2.2
+#available for download https://sourceforge.net/projects/popoolation/files/
+
+# run Tajimas pi on pileup files for each Regime (parameters also listed in Table S3)
+perl ~/libraries/popoolation_1.2.2/Variance-sliding.pl --measure pi --input Ancestor.pileup --fastq-type sanger --min-count 10 --min-qual 20 --min-coverage 25 --max-coverage 300 --min-covered-fraction 0.2 --pool-size 272 --window-size 50000 --step-size 10000 --output Ancestor.pi
+perl ~/libraries/popoolation_1.2.2/Variance-sliding.pl --measure pi --input Drought.pileup --fastq-type sanger --min-count 30 --min-qual 20 --min-coverage 100 --max-coverage 1000 --min-covered-fraction 0.2 --pool-size 1154 --window-size 50000 --step-size 10000 --output Drought.pi
+perl ~/libraries/popoolation_1.2.2/Variance-sliding.pl --measure pi --input Watered.pileup --fastq-type sanger --min-count 30 --min-qual 20 --min-coverage 100 --max-coverage 1000 --min-covered-fraction 0.2 --pool-size 1092 --window-size 50000 --step-size 10000 --output Watered.pi
+
+# run Tajima's pi on each pileup file from each drought library to explore potential nucleotide diversity loss
+for infile in Library[1-8].mpileup; do (base=$(basename ${infile} .mpileup); perl ~/libraries/popoolation_1.2.2/Variance-sliding.pl --measure pi --input ${infile} --fastq-type sanger --min-count 5 --min-qual 20 --min-coverage 15 --max-coverage 198 --min-covered-fraction 0.2 --pool-size 73 --window-size 50000 --step-size 10000 --output ${base}.pi); done
+
+# run tajimas_pi_code.R to calculate mean and standard deviation of pi diversity measure for each above generated pi file
+
+
+
+### section 8: Bayesian model with BayPass
+
+## section 8A: set up for BayPass
+
+# created baypass directory within results and src directory within BayPass
+mkdir /Volumes/Franks_lab/johnson/results/baypass /Volumes/Franks_lab/johnson/results/baypass/src/
+
+# set working directory to baypass
+cd /Volumes/Franks_lab/johnson/results/baypass/
+
+# software used was BayPass v2.2 
+#available for download from http://www1.montpellier.inra.fr/CBGP/software/baypass/download.html
+
+# Extracted files: 
+tar -xzvf baypass_2.2.tar.gz
+
+# Downloaded gfortran v8.2 for OS 10.14 from https://github.com/fxcoudert/gfortran-for-macOS/releases
+# python software is also required. I used v3.6 available for download here https://www.python.org/downloads/
+
+# created conda environment with gfortran 9.3.0, the most recent version of gfortran for OS 10.14
+conda create -name fortran
+conda activate fortran
+conda install -c conda-forge gfortran=9.3.0
+
+# initialized baypass (from bapyass directory)
+make clean all FC=gfortran 
+
+# deactivate and remove conda environment
+conda deactivate
+env remove --name gfortran
+
+# Installed joblib and numpy libraries to python 3.6 conda environment:
+conda create --name py36 python=3.6
+conda activate
+conda install -c anaconda numpy 
+conda install -c anaconda joblib
+conda deactivate
+condo env remove -n py36
+
+
+## section 8B: constructing input files for BayPass model
+
+# set working directory to baypass if not already there
+
+# fais_baypass.py, filter_baypass.R, find bam.txt, brassica.poolsize, and brassica.covariates provided in supporting information of publication
+#place in baypass directory
+#fais_baypass.py is a script to create input files for baypass and filter_baypass.R is a script to filter close loci
+#bam.txt is a list of file names, brassica.poolsize is a list of the ploidy number of each population, and brassica.covariates encodes whether each population is ancestor or descendant and, if descendant, drought or watered
+
+# filter and construct input files
+python3 fais_baypass.py -r 0.95 -q 30 -Q 30 -d 50 -L 15 -M 200 -n 2 -p anc_vs_desc /Volumes/Franks_lab/johnson/ref_genome/Brapa_sequence_v3.0.fasta bam.txt
+
+# thinned within 100 bp keeping sites with max variation-
+Rscript filter_baypass.R 
+
+
+## section 8C: running Baypass
+
+# run core model
+~/libraries/baypass_2.2/sources/g_baypass -npop 18 -gfile anc_vs_desc_baypass_r0.95_d50_L15_M200_q30_Q30_thin100.txt -poolsizefile brassica.poolsize -nthreads 4 -outprefix anc_vs_desc_core > anc_vs_desc_core.log
+
+# run auxiliary model
+~/libraries/baypass_2.2/sources/g_baypass -npop 18 -gfile anc_vs_desc_baypass_r0.95_d50_L15_M200_q30_Q30_thin100.txt -poolsizefile brassica.poolsize -efile brassica.covariates -omegafile anc_vs_desc_core_mat_omega.out -d0yij 35 -auxmodel -isingbeta 0.9 -nthreads 4 -outprefix anc_vs_desc_aux > anc_vs_desc_aux.log
+
+
+## section 8D: manhattan plot if differentiated SNPS
+
+# run Fig2_code.R to plot differentiated SNPs identified with our bayesian model and fisher exact tests
+
+
+
+### section 9: Gene enrichment
+
+# software used is bedtools v2.28.0
+#available for download https://bedtools.readthedocs.io/en/latest/#
+
+# added bedtools-2.28.0 to path
+
+
+## section 9A: set up exon lists
+
+# make genes directory in data 
+mkdir /Volumes/Franks_lab/johnson/data/genes/
+
+# change directory to genes
+cd /Volumes/Franks_lab/johnson/data/genes/
+
+# get pairs of genes from orthofinder output from Mike Barker's group (named Atha_v_Brap.tsv) and build_genepairs.py script
+# files provided in supporting information- place in genes directory
+
+# make table of gene pairs
+python build_genepairs.py Atha__v__Brap.tsv > Athal_Brapa_genePairs.txt
+
+# create enrichment directory in results
+mkdir /Volumes/Franks_lab/johnson/results/enrichment/
+
+# set working directory to enrichment in results 
+cd /Volumes/Franks_lab/johnson/results/enrichment/
+
+# download build_genepairs_tests.py script from supporting information, place in enrichment direcoty
+
+# unit tests and code coverage
+cd /Volumes/Franks_lab/johnson/results/enrichment/
+coverage run -m unittest build_genepairs_tests.py
+coverage report -m
+
+# change directory to ref_genome
+cd /Volumes/Franks_lab/johnson/data/ref_genome/
+
+# run minimap 2
+~/libraries/minimap2/minimap2 -c Brapa_sequence_v1.5.fa.gz Brapa_sequence_v3.0.fasta.gz > Brapa.paf
+
+# made a bedfile of exons on the version 1.5 genome .gff file
+zcat < Brapa_gene_v1.5.gff.gz | awk '$3~/CDS/ {print $1 "\t" $4-1 "\t" $5 "\t" $9}' | sed 's/ID=//g' | sed 's/;/\t/g' | cut -f1-4 > Brapa_gene_v1.5.bed
+
+# lifted coordinates onto v3
+#BRA gene names tagged onto v3
+#convert liftover coords to bed, but keep hits on v3 as metadeta find overlaps with v1 bed that includes BRA IDS.
+~/libraries/minimap2/misc/paftools.js liftover -l 100 Brapa.paf Brapa_gene_v1.5.bed | awk '{print $4 "\t" $1 "\t" $2+1 "\t" $3}' | tr "_" "\t"  | sed 's/\tt[0-9][0-9]*//g' | bedtools sort -i stdin | bedtools intersect -wao -a stdin -b Brapa_gene_v1.5.bed | cut -f4,5,6,10 | sed 's/Parent=//g' > Brapa_gene_v1tov3_lifted.bed
+
+# get list of evolved genes under drought from Franks et al. 2016 molecular ecology paper and convert to reference genome 3.0
+# download mec13615-sup-0005-datas1.xlsx from supporting information at https://onlinelibrary.wiley.com/doi/full/10.1111/mec.13615
+# save a comma separated version of this file as Franks2016.csv in the genes direcotry
+rg -NwFf <(cut -d "," -f1 ../genes/Franks2016.csv) Brapa_gene_v1tov3_lifted.bed > Brapa_gene_v1tov3_lifted_Franks2016.bed
+
+# subsequent steps to create flowering_and_stress_genes.tsv
+Rscript Flowering_genes.R
+Rscript Stress_genes.R
+Rscript merge_stress_flowering.R
+
+# preparing flowering and stress gene lists
+awk -F "\t" '{ if($6 == "flowering") { print } }' flowering_and_stress_genes.tsv > flowering_genes.bed
+awk -F "\t" '{ if($6 == "stress") { print } }' flowering_and_stress_genes.tsv > stress_genes.bed
+
+
+## section 9B: gene enrichment for bayesian model snps
+
+# navigate to fet directory
+cd /Volumes/Franks_lab/johnson/results/baypass/
+
+# preparing file with all sites associated with cov1 (testing differentiation between ancestors and descendants)
+tail -n+2 anc_vs_desc_full_df.txt | sed 's/\"//g' | awk '$7 ==1 {print $1 "\t" $2-1 "\t" $3 "\t" $4 "\t" $5 "\t" $6 "\t" $7 "\t" $8 "\t" $9 "\t" $10 "\t" $11}' > anc_vs_desc_full_df_cov1.bed
+wc -l anc_vs_desc_full_df_cov1.bed
+#375883
+
+# preparing file with BF >= 10 associated with cov 1
+awk -F "\t" '{ if($11 >= 10) { print } }' anc_vs_desc_full_df_cov1.bed > anc_vs_desc_cov1_snps_over10.bed
+wc -l anc_vs_desc_cov1_snps_over10.bed
+#472
+
+# preparing file with BF >= 20 associated with cov 1
+awk -F "\t" '{ if($11 >= 20) { print } }' anc_vs_desc_full_df_cov1.bed > anc_vs_desc_cov1_snps_over20.bed
+wc -l anc_vs_desc_cov1_snps_over20.bed
+#54
+
+# saved this list as text file for Table 1 in manuscript
+cat anc_vs_desc_cov1_snps_over20.bed > Baypass_cov1_BF20_snps.txt
+
+# preparing file with snps in exons and counting
+bedtools intersect -a anc_vs_desc_full_df_cov1.bed -b /Volumes/Franks_lab/johnson/results/Brapa_genes_v1tov3.bed -wa -wb > anc_vs_desc_snps_in_exons.txt
+wc -l anc_vs_desc_snps_in_exons.txt
+#49827
+
+# preparing file with BF > 10 snps in exons and counting
+bedtools intersect -a anc_vs_desc_cov1_snps_over10.bed -b /Volumes/Franks_lab/johnson/results/Brapa_genes_v1tov3.bed -wa -wb > anc_vs_desc_BF10_snps_in_exons.txt
+wc -l anc_vs_desc_BF10_snps_in_exons.txt
+#57
+
+# preparing file with BF > 20 snps in exons and counting
+bedtools intersect -a anc_vs_desc_cov1_snps_over20.bed -b /Volumes/Franks_lab/johnson/results/Brapa_genes_v1tov3.bed -wa -wb > anc_vs_desc_BF20_snps_in_exons.txt
+wc -l anc_vs_desc_BF20_snps_in_exons.txt
+#11
+
+# checking for snps within coding regions  genes from Franks 2016 study
+bedtools intersect -a anc_vs_desc_cov1_SNPs_over10.bed -b /Volumes/Franks_lab/johnson/results/Franks2016_v1tov3.bed -wa -wb > anc_vs_desc_cov1_BF10snps_in_Franks2016_genes.txt
+#1 SNP overlapped with Franks 2016 list: chr 2 position 10712570
+#too few to bother with enrichment analysis
+
+# preparing file with all SNPs in flowering exons
+bedtools intersect -a anc_vs_desc_full_df_cov1.bed -b /Volumes/Franks_lab/johnson/results/enrichment/flowering_genes.bed -wa -wb > anc_vs_desc_snps_in_FT_genes.txt
+wc -l anc_vs_desc_snps_in_FT_genes.txt
+#821
+
+# preparing file with BF>10 SNPs in flowering exons
+bedtools intersect -a anc_vs_desc_cov1_snps_over10.bed -b /Volumes/Franks_lab/johnson/results/enrichment/flowering_genes.bed -wa -wb > anc_vs_desc_BF10_snps_in_FT_genes.txt
+wc -l anc_vs_desc_BF10_snps_in_FT_genes.txt
+#0
+
+# preparing file with BF>10 SNPs in flowering exons
+bedtools intersect -a anc_vs_desc_cov1_snps_over20.bed -b /Volumes/Franks_lab/johnson/results/enrichment/flowering_genes.bed -wa -wb > anc_vs_desc_BF20_snps_in_FT_genes.txt
+wc -l anc_vs_desc_BF20_snps_in_FT_genes.txt
+#0
+
+# preparing file with all SNPs in stress exons
+bedtools intersect -a anc_vs_desc_full_df_cov1.bed -b /Volumes/Franks_lab/johnson/results/enrichment/stress_genes.bed -wa -wb > anc_vs_desc_snps_in_stress_genes.txt
+wc -l anc_vs_desc_snps_in_stress_genes.txt
+#6870
+
+# preparing file with BF>10 SNPs in stress exons
+bedtools intersect -a anc_vs_desc_cov1_snps_over10.bed -b /Volumes/Franks_lab/johnson/results/enrichment/stress_genes.bed -wa -wb > anc_vs_desc_BF10_snps_in_stress_genes.txt
+wc -l anc_vs_desc_BF10_snps_in_stress_genes.txt
+#8
+
+# preparing file with BF>20 SNPs in stress exons
+bedtools intersect -a anc_vs_desc_cov1_snps_over20.bed -b /Volumes/Franks_lab/johnson/results/enrichment/stress_genes.bed -wa -wb > anc_vs_desc_BF20_snps_in_stress_genes.txt
+wc -l anc_vs_desc_BF20_snps_in_stress_genes.txt
+#3
+
+
+## section 9C: gene enrichment for fishers exact test (FET) SNPs
+
+# navigate to fet directory
+cd /Volumes/Franks_lab/johnson/results/fet/
+
+# preparing bed file with all snps
+tail -n+2 anc_vs_drought_full_df.txt | sed 's/\"//g' > anc_vs_drought_full_df.bed
+
+# preparing file with sites that have significant p value after correction for inflation
+awk -F "\t" '{ if($7 >= 8.855332) { print } }' anc_vs_drought_full_df.bed > anc_vs_drought_sig_snps.bed
+
+# bedtools intersect for SNPs in exons
+bedtools intersect -a anc_vs_drought_full_df.bed -b /Volumes/Franks_lab/johnson/results/Brapa_genes_v1tov3.bed -wa -wb > anc_vs_drought_snps_in_exons.txt
+#4913424 SNPs in exons
+
+# bedtools intersect for sig SNPs in exons
+bedtools intersect -a anc_vs_drought_sig_snps.bed -b /Volumes/Franks_lab/johnson/results/Brapa_genes_v1tov3.bed -wa -wb > anc_vs_drought_sig_snps_in_exons.txt
+#147 sig SNPs in exons
+
+# exploring these sig SNPs in exons
+awk -F '\t' '{print $2}' anc_vs_drought_sig_snps_in_exons.txt | sort | uniq -c | wc -l
+#these spanned 146 unique loci
+awk -F '\t' '{print $11}' anc_vs_drought_sig_snps_in_exons.txt | sort | uniq -c | wc -l
+#these spanned 72 genes
+awk -F '\t' '{print $11}' anc_vs_drought_sig_snps_in_exons.txt | sort | uniq -c 
+#some genes had many SNPs, including 20 in Bra011782
+cat anc_vs_drought_sig_snps_in_exons.txt | cut -f11,4 | sort | uniq -c | cut -f2 | sort | uniq -c | awk '{if ($1!= 1) print $2}'
+#multiple reps had shifts in Bra004959
+grep "Bra004959" anc_vs_drought_sig_snps_in_exons.txt
+#replicates 1 and 4
+
+# bedtools intersect for fishers exact test (FET) snps in Franks 2016 differentiated genes 
+bedtools intersect -a anc_vs_drought_full_df.bed -b /Volumes/Franks_lab/johnson/results/Franks2016_v1tov3.bed -wa -wb > anc_vs_drought_snps_in_Franks2016_genes.txt
+#73528 snps in Franks 2016 gene list
+
+# bedtools intersect for sig fishers exact test (FET) snps in Franks 2016 differentiated genes 
+bedtools intersect -a anc_vs_drought_sig_snps.bed -b /Volumes/Franks_lab/johnson/results/Franks2016_v1tov3.bed -wa -wb > anc_vs_drought_sig_snps_in_Franks2016_genes.txt
+#3 sig snps in Franks 2016 gene list
+
+# bedtools intersect for snps in flowering exons
+bedtools intersect -a anc_vs_drought_full_df.bed -b /Volumes/Franks_lab/johnson/results/enrichment/flowering_genes.bed -wa -wb > anc_vs_drought_snps_in_FT_genes.txt
+wc -l anc_vs_drought_snps_in_FT_genes.txt 
+#70352 snps in flowering exons
+
+# bedtools intersect for snps in stress exons
+bedtools intersect -a anc_vs_drought_full_df.bed -b /Volumes/Franks_lab/johnson/results/enrichment/stress_genes.bed -wa -wb > anc_vs_drought_snps_in_stress_genes.txt
+wc -l anc_vs_drought_snps_in_stress_genes.txt 
+#678128 snps in stress exons
+
+# bedtools intersect for sig snps in flowering exons
+bedtools intersect -a anc_vs_drought_sig_snps.bed -b /Volumes/Franks_lab/johnson/results/enrichment/flowering_genes.bed -wa -wb > anc_vs_drought_sig_snps_in_FT_genes.txt
+wc -l anc_vs_drought_sig_snps_in_FT_genes.txt
+#1 sig snp in flowering exon
+
+# bedtools intersect for sig snps in stress exons
+bedtools intersect -a anc_vs_drought_sig_snps.bed -b /Volumes/Franks_lab/johnson/results/enrichment/stress_genes.bed -wa -wb > anc_vs_drought_sig_snps_in_stress_genes.txt
+wc -l anc_vs_drought_sig_snps_in_stress_genes.txt 
+#9 sig snps in stres exons
+
+
+## section 9D: running enrichment analysis 
+
+# run gene_enrichment_code.R script to test for enrichment with counts generated in sections 9B and 9C
+
+
+## section 9E: Checking SNPs in key FT regulators to see if any may be significant before GC correction
+
+# checked SOC1 and FLC orthologs and all SNPs within have BF of -13
+BayPass: grep "gene_name" anc_vs_desc_snps_in_exons.txt | sort -k 11 -r | head
+FET: grep "gene_name" anc_vs_desc_snps_in_exons.txt | sort -k 5 -r | head
+#only found 2 genes: Bra004929 and Bra004927 in D1 vs ancestor regime
+
+# inspected SNPs frequencies of these genes
+grep "SNP_end_pos" Population_level_rc
+
+
+
+### section 10: estimate of effective population size from reproductive data
+
+# download Johnson_et_al_2021_Evolution_individuals_data.csv to results directory which contains fitness data from test generation
+
+# run effective_pop_size_estimate_code.R to simulate effective population size during experiment from differential reproduction observed
+
+
