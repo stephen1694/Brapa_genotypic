@@ -25,16 +25,16 @@ Files are names as 2022 because that is when the final analyses and submission w
 
 ## Code files:
 
-"Johnson_et_al_2022_JEB_code.md" contains all command line code used to generate published results.
-"Fig1_code.R" contains all R code used to generate Figure 1, which plots snp frequencies of populations on pc axis.
-"Fig2_code.R" contains all R code used to generate Figure 2, which displays manhattan plots of differentiated snps identified 1) between ancestors and decendants with our Bayesian model in BayPass and 2) between drought replicates and ancestos with fisher exact tests.
-"tajimas_pi_code.R" contains all R code used to calculate mean and se nucleotide diversity (pi) from .pi files generated with PoPoolation software.
-"gene_enrichment_code.R" contains all R code used to run enrichment analysis in R from counts of significant and nonsignificant SNPs generated with bedtools intersect.
-"effective_pop_size_estimate_code.R" contains all R code used to estimate effective population size from reproduction data provided in Johnson_et_al_2022_Evolution_individuals_data.csv.
-"fais_baypass.py" produces a baypass format .txt file for downstream Baypass analysis using the reference genome and a .txt file with the names of the sorted bam files to use.
-"filter_baypass.R" is used to filter close variable loci (if within 100 bp, keeping the one with most variation) prior to running models in BayPass.
-"build_genepairs.py" contains a python script to make a table of B. rapa and A. thaliana gene pairs from Atha__v__Brap.tsv.
-"build_genepairs_tests.py" contains a python script to run unit tests.
-"Flowering_genes.R" created flowering_genes.tsv list from http://brassicadb.cn/#/FlowerGene/
-"Stress_genes.R" created stress_genes.tsv list from NCBI list of stress genes.
-"merge_stress_flowering.R" merges flowering_genes.tsv and stress_genes.tsv to create flowering_and_stress_genes.tsv.
+"Johnson_et_al_2022_JEB_code.md" contains all command line code used to generate published results.  
+"Fig1_code.R" contains all R code used to generate Figure 1, which plots snp frequencies of populations on pc axis.  
+"Fig2_code.R" contains all R code used to generate Figure 2, which displays manhattan plots of differentiated snps identified 1) between ancestors and decendants with our Bayesian model in BayPass and 2) between drought replicates and ancestos with fisher exact tests.  
+"tajimas_pi_code.R" contains all R code used to calculate mean and se nucleotide diversity (pi) from .pi files generated with PoPoolation software.  
+"gene_enrichment_code.R" contains all R code used to run enrichment analysis in R from counts of significant and nonsignificant SNPs generated with bedtools intersect.  
+"effective_pop_size_estimate_code.R" contains all R code used to estimate effective population size from reproduction data provided in Johnson_et_al_2022_Evolution_individuals_data.csv.  
+"fais_baypass.py" produces a baypass format .txt file for downstream Baypass analysis using the reference genome and a .txt file with the names of the sorted bam files to use.  
+"filter_baypass.R" is used to filter close variable loci (if within 100 bp, keeping the one with most variation) prior to running models in BayPass.  
+"build_genepairs.py" contains a python script to make a table of B. rapa and A. thaliana gene pairs from Atha__v__Brap.tsv.  
+"build_genepairs_tests.py" contains a python script to run unit tests.  
+"Flowering_genes.R" created flowering_genes.tsv list from http://brassicadb.cn/#/FlowerGene/  
+"Stress_genes.R" created stress_genes.tsv list from NCBI list of stress genes.  
+"merge_stress_flowering.R" merges flowering_genes.tsv and stress_genes.tsv to create flowering_and_stress_genes.tsv.  
